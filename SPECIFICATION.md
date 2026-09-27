@@ -65,8 +65,14 @@
 | Файл | Ключи `mcp` |
 |---|---|
 | `C:\Users\dggio\.config\opencode\opencode.jsonc` | `comfyui` (npx artokun), `comfy-mcp` (pip Comfy-Org) |
-| `C:\Users\dggio\.config\kilo\kilo.json` | `comfyui` (npx artokun) + `permission.comfyui_*: allow` |
+| `C:\Users\dggio\.config\kilo\kilo.json` | `comfyui` (npx artokun), **`comfy-mcp` (pip Comfy-Org)** + `permission.comfyui_*: allow` |
 | `C:\Users\dggio\.config\kilo\kilo.jsonc` | `comfyui` (npx @miller-joe) |
+
+> `kilo.json` (2026-09-20) новее `kilo.jsonc` (2026-09-17) → считается активным; официальный сервер
+> добавлен **только** туда (решение 27.09.2026). Бэкап: `kilo.json.bak-20260927`.
+> `permission.comfy-mcp_*` **не** добавлял: часть инструментов официального сервера
+> (`partner_generate`, `run_template`, `emit_partner_workflow` + `run_workflow`) тратит кредиты —
+> пусть Kilo спрашивает. Схема `https://app.kilo.ai/config.json` — 0 ошибок.
 
 Запись официального сервера в `opencode.jsonc`:
 
