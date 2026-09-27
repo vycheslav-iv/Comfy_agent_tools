@@ -3,7 +3,13 @@
 Инвентаризация инструментов агентов для работы с ComfyUI: MCP-серверы, панель агента,
 локальные модели и конфиги. Обновляется при изменении архитектуры.
 
-Состояние на **2026-09-27**.
+| Файл | Роль |
+|---|---|
+| `SPECIFICATION.md` | это — полная карта (архитектура, конфиги, патчи) |
+| `README.md` | **сначала сюда**: обновление ComfyUI — что слетит/не слетит, быстрая проверка |
+| `SESSION_MEMORY.md` | состояние последней сессии |
+
+Состояние на **2026-09-27** (сессия 2 — бэкенд Kilo Gateway, см. §7).
 
 ---
 
@@ -174,3 +180,41 @@ curl -s https://opencode.ai/config.json -o /tmp/oc-schema.json
 ```
 
 Ожидаемо: `serverInfo = comfy-mcp`, 39 tools, `server_info` → `isError: false`.
+
+## 7. Бэкенд панели: Kilo Gateway (бесплатные модели, 27.09.2026)
+
+Панель работает на бэкенде `custom` (OpenAI-совместимый шлюз **без API-ключа**):
+
+| Ключ в `comfy.settings.json` | Значение |
+|---|---|
+| `comfyui-mcp.defaultBackend` | `custom` |
+| `comfyui-mcp.custom.baseUrl` | `https://api.kilo.ai/api/gateway` |
+| `comfyui-mcp.defaultModel.custom` | `nvidia/nemotron-3-super-120b-a12b:free` |
+
+Альтернатива (env, приоритет выше json): `COMFYUI_MCP_CUSTOM_BASE_URL/_MODEL/_API_KEY`;
+хранение — `~/.comfyui-mcp/panel-settings.json`, dotenv `~/.comfyui-mcp/.env`.
+Бэкенд применяется на **F5**, без перезапуска ComfyUI.
+
+**Каталог:** `GET …/models` → 394 модели, **18 free** (суффикс `:free`).
+Tool calling подтверждён 4/4 (`nemotron-3-super-120b`, `north-mini-code`,
+`laguna-xs-2.1`, `step-3.7-flash`). Без `tools` — `nemotron-3.5-content-safety`.
+⚠️ все free: `mayTrainOnYourPrompts: True`; 429 на общем пуле ретраит `rate-limit.js`.
+
+**Исследовано и отклонено — OpenCode Zen:** free-модель без ключа →
+**403 `FreeTierError`** «free tier can only be used from within OpenCode»;
+платная без ключа → 401. Плюс auto-reload баланса <$5 → +$20.
+
+**Верификация** (`~/.comfyui-mcp/launch-logs/connect-orchestrator.log`):
+
+```
+[panel-orchestrator] custom endpoint config → model=… host=https://api.kilo.ai/api/gateway
+[ollama-backend] tool surface recovered: 0 → 41 comfyui tools, 96 panel tools
+[ollama-backend] ready (openai-compatible @ https://api.kilo.ai/api/gateway, … Tool mode: full)
+[panel-agent orchestr] turn done
+```
+
+⚠️ **Ложная тревога:** на старте сессии `never-connected` / `0 tools` — исходит от
+**пробного** инстанса бэкенда (без `mcpServers`); агентный получает те же stdio-тулы,
+что и ollama (`index.js`, ветка `backend === "custom"`), и поднимает их на первом ходе.
+
+Подробнее — скилл `comfyui-kilo-gateway` (корень бандла, `.opencode|.kilo|.agents`).

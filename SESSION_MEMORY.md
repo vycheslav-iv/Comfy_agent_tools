@@ -1,4 +1,4 @@
-# Память сессии — Comfy Agent Tools (2026-09-27)
+# Память сессии — Comfy Agent Tools (2026-09-27, сессия 2)
 
 > Покажи этот файл агенту, чтобы продолжить работу.
 > Всегда сверяйся с `AGENTS.md` и `SPECIFICATION.md`.
@@ -7,86 +7,89 @@
 
 ## 1. Что делали в этой сессии (кратко)
 
-Выяснили происхождение панели `comfyui-agent-panel` (её установил агент 13.09.2026 по запросу
-«установи MCP сервер для комфи» вместо официального `Comfy-Org/comfy-mcp`), затем поставили
-официальный сервер **рядом** и вынесли всё в отдельную папку проекта.
+Перевели панель `comfyui-agent-panel` на **бесплатный бэкенд Kilo Gateway** —
+OpenAI-совместимый шлюз без API-ключа. OpenCode Zen исследован и **отклонён**
+(free tier даёт 403 только изнутри OpenCode). Настройка доведена до живого прогона:
+агент отвечает, тулы подключены (41 comfyui + 96 panel). Создан скилл
+`comfyui-kilo-gateway`, обновлены `SPECIFICATION.md` §7 и таблица скиллов `AGENTS.md`.
 
 ## 2. Итоговое состояние
 
-- `SPECIFICATION.md` — полная инвентаризация: 3 MCP-сервера, хронология установки панели,
-  патч npx-кэша, окружение, команды проверки. **Начинать с него.**
-- `SESSION_MEMORY.md` — этот файл.
-- git-репозиторий создан (корень проекта = папка с `.git`, root `AGENTS.md` §9).
+**Конфиг панели применён** (`comfy.settings.json`, читается кодом с точками):
 
-### Установлено в этой сессии
+```json
+"comfyui-mcp.defaultBackend": "custom",
+"comfyui-mcp.custom.baseUrl": "https://api.kilo.ai/api/gateway",
+"comfyui-mcp.defaultModel.custom": "nvidia/nemotron-3-super-120b-a12b:free"
+```
 
-- `F:\Python\Python314`: `comfy-mcp 0.10.0` + `comfy-cli 1.21.0`
-  (побочный эффект: `typing_extensions 4.15.0 → 4.16.0`)
-- `comfy set-default "D:/ComfyUI_windows_portable/ComfyUI"` — привязка к существующей ComfyUI,
-  `comfy install` **не** запускался
-- `~/.config/opencode/opencode.jsonc` → добавлен `mcp."comfy-mcp"` рядом с `"comfyui"`
-  (схема: `https://opencode.ai/config.json`, валидация чистая)
-- `~/.config/kilo/kilo.json` → добавлен `mcp."comfy-mcp"` (бэкап `kilo.json.bak-20260927`,
-  схема `https://app.kilo.ai/config.json` — 0 ошибок)
-- скиллы `comfyui-mcp-setup` и `comfyui-agent-model-labels` — по правилу совместимости в
-  **трёх** местах: `.opencode/skills/`, `.kilo/skills/`, `.agents/skills/` (6 файлов, валидны).
-  ⚠️ **Они лежат в корне бандла, который `.no_git` — версионируются нигде.**
-  Память и `SPECIFICATION.md` — в этом репозитории; скиллы — только на диске.
-- корневой `README.md` — `Comfy_agent_tools` добавлен в карту «Что где лежит»
+**Живая верификация** (`~/.comfyui-mcp/launch-logs/connect-orchestrator.log`):
+
+- `custom endpoint config → model=… host=https://api.kilo.ai/api/gateway`
+- `tool surface recovered: 0 → 41 comfyui tools, 96 panel tools`
+- `ready (openai-compatible @ …, Tool mode: full)` → `turn done`
+
+**Ключевые места в коде (npx-кэш `_npx\28eae33d00f3f7f1\...\dist\orchestrator\`):**
+
+- `index.js` ветка `backend === "custom"` — `OllamaBackend` + `mcpServers` (те же stdio-тулы, что у ollama)
+- `index.js` `customDeps()` — `{api:"openai", host, apiKey?}`; **ключ опционален**
+- `ollama-backend.js:673` `authHeaders()` — заголовок не шлётся без ключа; `:1146-1147` fetch на `${host}/chat/completions`
+- `rate-limit.js` — ретраи **только на 429** (shared free-пул)
+- `services/panel-settings.js` — `~/.comfyui-mcp/panel-settings.json`
+
+**Скилл `comfyui-kilo-gateway`** — три копии (`.opencode/`, `.kilo/`, `.agents/`),
+строка добавлена в `AGENTS.md` §3. ⚠️ лежат в корне бандла (`.no_git`) — версионируются нигде.
 
 ## 3. Проблемы, которые встречались (и как решали)
 
-- **Панель показывала «Qwen3 Coder Plus»** — барьер `isQwenModel(/^qwen/i)` отсекал локальные
-  Ollama-модели → патч `qwen-backend.js` в обеих копиях npx-кэша.
-- **`comfy-mcp --version` не печатает ничего** — это stdio-сервер; проверять только через
-  рукопожатие MCP, и **держать stdin открытым** (`sleep 25`), иначе ответ не придёт.
-- **`/tmp/...` невидим для Windows-Python** — сохранять артефакты в
-  `C:/Users/dggio/AppData/Local/Temp/opencode/`.
-- **Валидация конфига даёт 1 ошибку** — предсуществующая: `model` вне enum схемы. К правкам не относится.
+- **`never-connected` / `0 tools` в логе при старте** — пугает, но это **пробный**
+  инстанс бэкенда (у probe нет `mcpServers`). Реальный поднимает тулы на первом ходе →
+  `tool surface recovered`. Проверять **после** отправки сообщения в панель.
+- **`/api/status` (порт 9196) не показывает `custom`** — там только CLI-провайдеры.
+  Не признак поломки.
+- **Пользователь не понимал, какие модели бесплатные** — панель показывает все 394.
+  Правило: суффикс **`:free`** (18 шт.); без `tools` — `content-safety`, слабая — `lfm-2.6b`.
+- **Тест `/tmp/...` из Windows-Python не работает** — артефакты в
+  `C:/Users/dggio/AppData/Local/Temp/opencode/` (`kilo_models.json`).
+- **Закоммичено в сессии 1** — дерево чистое, `git status` пуст.
 
 ## 4. Что важно не сломать при продолжении работы
 
-- ⛔ **Только Git Bash** (root `AGENTS.md`), никакого PowerShell.
-- ⛔ **Не `git init` в корне бандла** — там `.no_git`; память только в папке с `.git`.
-- ⛔ **Не удалять панель** `comfyui-agent-panel` без отдельного разрешения — пользователь выбрал
-  режим «рядом»; панель = единственный внутриComfyUI-агент.
-- ⛔ **Не `comfy install`** — он создаст второй workspace. Только `comfy set-default`.
-- ⛔ **Патч npx-кэша хрупкий** — сотрётся при `comfyui-mcp@latest`; после автообновления перепроверить
-  `dist/orchestrator/qwen-backend.js` (`QWEN_MODELS`, `QWEN_DEFAULT_MODEL`, `isQwenModel`).
-- ⛔ **Не путать три MCP-пакета**: artokun `comfyui-mcp` ≠ Comfy-Org `comfy-mcp` ≠ miller-joe `@miller-joe/comfyui-mcp`.
-- ⛔ **`F:\Python\Python314\Scripts` не в PATH** — в конфигах только абсолютные пути + `COMFY_BIN`.
-- ⛔ **Скиллы правятся во всех трёх папках сразу** (`.opencode/`, `.kilo/`, `.agents/`) — иначе
-  Kilo Code / Cursor не увидят изменение (правило совместимости, root `AGENTS.md`).
-- ⛔ **Перед правкой sizing/CSS — читать исходники фронтенда** (скилл `comfyui-frontend-sources`).
+- ⛔ **Только Git Bash**, никакого PowerShell.
+- ⛔ **Не `git init` в корне бандла** (`.no_git`); память — только в `Comfy_agent_tools/`.
+- ⛔ **Не ставить OpenCode Zen** — 403 FreeTierError + авто-доливка $20.
+- ⛔ **Не удалять панель** — она единственный внутриComfyUI-агент (режим «рядом»).
+- ⛔ **Не `comfy install`** — только `comfy set-default`.
+- ⛔ **Патч npx-кэша хрупкий** — сотрётся при автообновлении `comfyui-mcp@latest`.
+- ⛔ **Скиллы правятся в трёх папках сразу** + строка в `AGENTS.md` §3.
+- ⛔ **Ключи в `comfy.settings.json` — с точками**, артефакты с `_` (старая версия) не читаются.
 
 ## 5. Что сделано / что осталось
 
-**Сделано 27.09.2026 (после перезапуска opencode):**
-- ✅ Перезапуск opencode → **оба сервера подключены**: `comfyui` (artokun) + `comfy-mcp` (официальный).
-  `server_info` отвечает: workspace `D:\ComfyUI_windows_portable\ComfyUI`, comfy-cli 1.21.0,
-  envelope/1, видит RTX 5060 Ti 16 ГБ. Оба новых скилла загружены.
-- ✅ `kilo.json` → добавлен `mcp."comfy-mcp"` (решение пользователя: **в kilo.json**, не в `.jsonc`).
-  Бэкап `kilo.json.bak-20260927`; схема `https://app.kilo.ai/config.json` — 0 ошибок.
-  `permission.comfy-mcp_*` **не** ставил (см. `SPECIFICATION.md` §2).
-- ✅ Панель artokun — решение: **пока оставить** (EOL 09.10.2026, но это единственный
-  внутриComfyUI-агент; у официального сервера `In-App Agent` = private alpha).
+**Сделано 27.09.2026:**
+- ✅ Kilo Gateway исследован live: `GET /models` → 394 (18 free); `POST /chat/completions`
+  без ключа → 200; tool calling 4/4.
+- ✅ Три ключа панели записаны через `set_ui`, прочитаны обратно из `comfy.settings.json`.
+- ✅ Живой прогон: `turn done`, 41+96 тулов, `Tool mode: full` (модель 120B ≥ 70B порога).
+- ✅ Zen отклонён (403/401, документировано в `SPECIFICATION.md` §7).
+- ✅ Скилл `comfyui-kilo-gateway` ×3 + `AGENTS.md` §3 + `SPECIFICATION.md` §7.
+- ✅ Память сессии 1 снапшотнута в `SESSION_MEMORY-history/2026-09-27.md`.
 
-**Осталось (идеи, не сделано):**
-1. Сравнить 39 инструментов официального сервера с тем, что реально нужно.
+**Осталось (идеи):**
+1. Сравнить 39 инструментов официального сервера с реально нужными.
 2. Проверить автокомпакт Qwen Code в ACP-режиме панели.
-3. Проверить, читает ли Kilo `kilo.json` или `kilo.jsonc` (официальный сервер добавлен только в
-   `kilo.json` — если активен `.jsonc`, правку надо перенести).
-4. ⚠️ `server_info` показал `running: false` и `freshness.error` (таймаут `comfy outdated` 15с) —
-   ComfyUI сейчас не запущен; проверить, когда понадобится.
-5. Опционально: `gh repo create` для этого проекта (команда пользователя не было).
-6. Опционально: положить копии скиллов внутрь репозитория — сейчас они только в корне бандла (`.no_git`).
+3. Проверить, читает ли Kilo `kilo.json` или `kilo.jsonc` (правка в `kilo.json`).
+4. Опционально: `gh repo create` для этого проекта (команды не было).
+5. Опционально: копии скиллов внутрь репозитория (сейчас только в `.no_git`).
+6. Возможные улучшения Kilo: при 429 переключать модель, добавить `set_ui`-пресет
+   переключения free-моделей.
 
 ## 6. Связанные файлы
 
-- `F:\AI_projects\Custom_node_ComfyUI\Comfy_agent_tools\SPECIFICATION.md`
-- `C:\Users\dggio\.config\opencode\opencode.jsonc` — `mcp.comfyui`, `mcp.comfy-mcp`
-- `C:\Users\dggio\.config\kilo\kilo.json`, `kilo.jsonc`
-- `F:\Python\Python314\Scripts\{comfy-mcp.exe,comfy.exe}`
-- `D:\ComfyUI_windows_portable\ComfyUI\custom_nodes\comfyui-agent-panel\`
-- npx-кэш: `...\_npx\28eae33d00f3f7f1\` и `8af3af54f44861ce\` → `dist/orchestrator/qwen-backend.js`
-- `C:\Users\dggio\.local\share\opencode\log\opencode.log` — сеанс `run=09416059` (установка панели)
+- `F:\AI_projects\Custom_node_ComfyUI\Comfy_agent_tools\SPECIFICATION.md` (§7 — Kilo)
+- `F:\AI_projects\Custom_node_ComfyUI\.opencode\skills\comfyui-kilo-gateway\SKILL.md` (+`.kilo`, `.agents`)
+- `F:\AI_projects\Custom_node_ComfyUI\AGENTS.md` — §3 таблица скиллов
+- `D:\ComfyUI_windows_portable\ComfyUI\user\default\comfy.settings.json` — 3 ключа панели
+- `C:\Users\dggio\.comfyui-mcp\launch-logs\connect-orchestrator.log` — верификация
+- `C:\Users\dggio\AppData\Local\Temp\opencode\kilo_models.json` — 394 модели
+- npx-кэш: `_npx\28eae33d00f3f7f1\`, `8af3af54f44861ce\` → `dist/orchestrator/`
