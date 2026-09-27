@@ -9,19 +9,21 @@
 | `README.md` | **сначала сюда**: обновление ComfyUI — что слетит/не слетит, быстрая проверка |
 | `SESSION_MEMORY.md` | состояние последней сессии |
 
-Состояние на **2026-09-27** (сессия 2 — бэкенд Kilo Gateway, см. §7).
+Состояние на **2026-09-27** (сессия 2 — бэкенд Kilo Gateway, см. §7;
+сессия 3 — приведение конфигов в порядок, см. §1.3 и §2).
 
 ---
 
 ## 1. MCP-ландшафт
 
-Установлено **три** MCP-сервера для ComfyUI. Это разные пакеты разных авторов — не путать.
+Подключено **два** MCP-сервера — одинаковых во всех трёх агентах (opencode, Kilo, Freebuff).
+Третий пакет (`@miller-joe`) **отвязан от конфигов 27.09.2026** (см. §1.3), сам пакет в npx-кэше остался.
 
 | Ключ в конфиге | Пакет | Тип | Автор | Статус | Локация |
 |---|---|---|---|---|---|
 | `comfyui` | `comfyui-mcp` (npm) | нода + MCP | artokun | **EOL** с 09.10.2026 | npx-кэш |
 | `comfy-mcp` | `comfy-mcp` (pip) 0.10.0 + `comfy-cli` 1.21.0 | только MCP | Comfy-Org | **beta**, активен (пуш 20.09.2026) | `F:\Python\Python314` |
-| `comfyui` (в kilo.jsonc) | `@miller-joe/comfyui-mcp` 0.3.0 | stdio MCP | Joe Miller | — | npx-кэш `ac63b27a31aa6dfd` |
+| ~~`comfyui`~~ (был в kilo.jsonc и `~/.agents/mcp.json`) | `@miller-joe/comfyui-mcp` 0.3.0 | stdio MCP | Joe Miller | **отвязан везде 27.09.2026** | npx-кэш `ac63b27a31aa6dfd` |
 
 ### 1.1. `comfyui-mcp` (artokun) — поставщик панели
 
@@ -57,12 +59,34 @@
   `free_memory`, `run_workflow`, `run_template`, `generate_image`, `fetch_outputs`,
   `search_nodes`/`search_models`/`search_templates`, `validate_workflow`.
 
-### 1.3. `@miller-joe/comfyui-mcp` — не путать
+### 1.3. `@miller-joe/comfyui-mcp` — не путать (отвязан 27.09.2026)
 
-- Автор Joe Miller, «text-to-image generation via MCP».
-- Прописан **только** в `~/.config/kilo/kilo.jsonc`: `npx -y @miller-joe/comfyui-mcp --stdio --comfyui-url http://127.0.0.1:8188`.
-- npx-кэш `ac63b27a31aa6dfd` создан 17.09.2026 09:56.
-- К панели artokun отношения **не имеет** — более поздняя независимая установка.
+- Автор Joe Miller, «text-to-image generation via MCP», версия 0.3.0.
+- **Откуда взялся:** строку записала сама Kilo 17.09.2026 09:54 (формат файла — output
+  мастер-а `kilo mcp add`: pretty-print, многострочные массивы, `timeout: 30000`,
+  флаги `--stdio --comfyui-url`). npx-кэш `ac63b27a31aa6dfd` создан 17.09 09:56 —
+  то есть сервер реально запускался. Истории изменений нет: `~/.config/kilo` — git-репо
+  **без единого коммита**.
+- **Почему это был конфликт:** ключ `comfyui` существовал и в `kilo.json` (artokun).
+  Kilo читает цепочку `["kilo.jsonc","kilo.json","opencode.jsonc","opencode.json","config.json"]`
+  (источник: `dist/extension.js` расширения Kilo) и **схлопывает по имени ключа**,
+  `kilo.jsonc` приоритетнее → artokun-строка в Kilo мертва, а в UI светились **3** записи.
+- **Удалён из `kilo.jsonc` 27.09.2026** → теперь в Kilo ровно 2 сервера, как в opencode.
+  К панели artokun отношения никогда не имел — независимая установка.
+- **Второй дом — `~/.agents/mcp.json`** (общий конфиг для Freebuff / Cursor / Windsurf):
+  туда его тоже прописали, в сессиях Freebuff с **22.09.2026** он инжектится во все
+  agent-шаблоны (`base-chat`, `base2`, … — до 50 штук). Файл создан 21.09 06:29.
+  **Переведён на ту же пару 27.09.2026** (бэкап `mcp.json.bak-20260927`).
+- **Замер `tools/list` (27.09.2026, живые серверы):**
+  | Сервер | Тулов | Последний релиз |
+  |---|---|---|
+  | artokun `comfyui-mcp` 0.52.203 | **41** | 10.09.2026 (EOL 09.10.2026) |
+  | miller-joe 0.3.0 | **15** | **25.04.2026** (5 мес. без релизов) |
+  | официальный `comfy-mcp` 0.10.0 | **39** | активен (пуш 20.09.2026) |
+  Уникальное у miller-joe: `refine_image`, `generate_variations`, `upscale_image`,
+  `list_models`, `list_workflows`, реестр шаблонов. **Решение: не возвращать** —
+  генерация покрыта официальным сервером, панели нужен artokun; если `refine_image`
+  понадобится, добавить отдельным ключом `comfy-gen` (конфликта не будет).
 
 ---
 
@@ -71,14 +95,26 @@
 | Файл | Ключи `mcp` |
 |---|---|
 | `C:\Users\dggio\.config\opencode\opencode.jsonc` | `comfyui` (npx artokun), `comfy-mcp` (pip Comfy-Org) |
-| `C:\Users\dggio\.config\kilo\kilo.json` | `comfyui` (npx artokun), **`comfy-mcp` (pip Comfy-Org)** + `permission.comfyui_*: allow` |
-| `C:\Users\dggio\.config\kilo\kilo.jsonc` | `comfyui` (npx @miller-joe) |
+| `C:\Users\dggio\.config\kilo\kilo.jsonc` | **`comfyui` (npx artokun), `comfy-mcp` (pip Comfy-Org)** — единственный источник |
+| `C:\Users\dggio\.config\kilo\kilo.json` | **`mcp` убран** (27.09.2026); остались `shell` (Git Bash) и `permission.comfyui_*: allow` |
+| `C:\Users\dggio\.agents\mcp.json` | **`comfyui` (npx artokun), `comfy-mcp` (exe)** — Freebuff / Cursor / Windsurf; бэкап `mcp.json.bak-20260927` |
 
-> `kilo.json` (2026-09-20) новее `kilo.jsonc` (2026-09-17) → считается активным; официальный сервер
-> добавлен **только** туда (решение 27.09.2026). Бэкап: `kilo.json.bak-20260927`.
+> **Все три агента (opencode, Kilo, Freebuff) теперь на одной паре серверов.**
+> Freebuff (npm `freebuff` → бинарь `~/.config/manicode/freebuff.exe`, продукт «manicode»)
+> читает именно `~/.agents/mcp.json`; проектных `mcp.json` в репозиториях нет.
+
+> **Правило (27.09.2026): один ключ = один файл.** У Kilo два конфига, и раньше в обоих был
+> ключ `comfyui` (в `kilo.jsonc` — miller-joe, в `kilo.json` — artokun). Kilo читает
+> `["kilo.jsonc","kilo.json", …]` и схлопывает по имени, поэтому `kilo.jsonc` вытеснял
+> artokun, а в списке MCP горели **3** строки при 2 работающих серверах.
+> Теперь весь блок `mcp` живёт **только в `kilo.jsonc`** (туда же пишет `kilo mcp add`),
+> `kilo.json` от него избавлен — дубль невозможен.
+> Бэкапы: `kilo.jsonc.bak-20260927`, `kilo.json.bak2-20260927`, `kilo.json.bak-20260927`.
 > `permission.comfy-mcp_*` **не** добавлял: часть инструментов официального сервера
 > (`partner_generate`, `run_template`, `emit_partner_workflow` + `run_workflow`) тратит кредиты —
 > пусть Kilo спрашивает. Схема `https://app.kilo.ai/config.json` — 0 ошибок.
+> Проверка после правки: `kilo mcp list` → `comfyui` (npx comfyui-mcp) + `comfy-mcp` (exe),
+> оба `connected`, `2 server(s)`.
 
 Запись официального сервера в `opencode.jsonc`:
 
