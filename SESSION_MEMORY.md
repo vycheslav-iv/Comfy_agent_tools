@@ -26,7 +26,10 @@
   `comfy install` **не** запускался
 - `~/.config/opencode/opencode.jsonc` → добавлен `mcp."comfy-mcp"` рядом с `"comfyui"`
   (схема: `https://opencode.ai/config.json`, валидация чистая)
-- скиллы `comfyui-mcp-setup` и `comfyui-agent-model-labels` — в `.opencode/`, `.kilo/`, `.agents/`
+- скиллы `comfyui-mcp-setup` и `comfyui-agent-model-labels` — по правилу совместимости в
+  **трёх** местах: `.opencode/skills/`, `.kilo/skills/`, `.agents/skills/` (6 файлов, валидны).
+  ⚠️ **Они лежат в корне бандла, который `.no_git` — версионируются нигде.**
+  Память и `SPECIFICATION.md` — в этом репозитории; скиллы — только на диске.
 
 ## 3. Проблемы, которые встречались (и как решали)
 
@@ -49,6 +52,9 @@
   `dist/orchestrator/qwen-backend.js` (`QWEN_MODELS`, `QWEN_DEFAULT_MODEL`, `isQwenModel`).
 - ⛔ **Не путать три MCP-пакета**: artokun `comfyui-mcp` ≠ Comfy-Org `comfy-mcp` ≠ miller-joe `@miller-joe/comfyui-mcp`.
 - ⛔ **`F:\Python\Python314\Scripts` не в PATH** — в конфигах только абсолютные пути + `COMFY_BIN`.
+- ⛔ **Скиллы правятся во всех трёх папках сразу** (`.opencode/`, `.kilo/`, `.agents/`) — иначе
+  Kilo Code / Cursor не увидят изменение (правило совместимости, root `AGENTS.md`).
+- ⛔ **Перед правкой sizing/CSS — читать исходники фронтенда** (скилл `comfyui-frontend-sources`).
 
 ## 5. Следующие шаги (идеи, не сделано)
 
